@@ -1,0 +1,44 @@
+name: Build CUDA binaries Only rtx 3050 laptop
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-cuda:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add swap space
+        run: |
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.19
+        with:
+          cuda: '12.4.0'
+
+      - name: Configure
+        run: cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES="86"
+
+      - name: Build
+        run: cmake --build build -j 2 --target llama-cli llama-server
+
+      - name: Package
+        run: |
+          mkdir output
+          cp build/bin/llama-cli build/bin/llama-server output/
+          cd output
+          tar -czf llama-cuda-12.4-rtx3050-x64.tar.gz llama-cli llama-server
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cuda-build-${{ github.run_number }}
+          files: output/llama-cuda-12.4-rtx3050-x64.tar.gz
